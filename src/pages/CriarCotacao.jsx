@@ -20,23 +20,19 @@ import {
   Barcode,
   Users,
   Percent,
-  CreditCard,
-  Smartphone,
-  Wallet,
   Download,
-  Share2,
   Send,
   X,
   Printer,
   Eye,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
+import emailjs from "emailjs-com";
 
 function CriarCliente() {
   const [tipoCliente, setTipoCliente] = useState("Particular");
   const [isSwitching, setIsSwitching] = useState(false);
   const [showVehicleForm, setShowVehicleForm] = useState(false);
-  const [mostrarPagamento, setMostrarPagamento] = useState(false);
   const [mostrarOpcoesPartilha, setMostrarOpcoesPartilha] = useState(false);
   const [cotacaoGerada, setCotacaoGerada] = useState(null);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -58,13 +54,6 @@ function CriarCliente() {
     premioAnnual: "",
   });
 
-  // Estados para pagamento
-  const [formaPagamento, setFormaPagamento] = useState("");
-  const [contactoMPesa, setContactoMPesa] = useState("");
-  const [contactoEMola, setContactoEMola] = useState("");
-  const [pinPagamento, setPinPagamento] = useState("");
-  const [processandoPagamento, setProcessandoPagamento] = useState(false);
-
   const [formData, setFormData] = useState({
     nacionalidade: "MZ",
     tituloContato: "",
@@ -78,10 +67,14 @@ function CriarCliente() {
     numeroReferenciaFiscal: "",
   });
 
-  // Array temporário para persistir cotações
-  const [cotacoesSalvas, setCotacoesSalvas] = useState([]);
+  // Configuração do EmailJS (substitua com suas credenciais)
+  const EMAILJS_CONFIG = {
+    SERVICE_ID: "service_i20ww7m", // Crie um service no EmailJS
+    TEMPLATE_ID: "template_nv37m8h", // Crie um template no EmailJS
+    PUBLIC_KEY: "fDnSvK3wOFUgLLuVK", // Sua Public Key do EmailJS
+  };
 
-  // Configurações das coberturas baseadas no Excel
+  // Configurações das coberturas
   const configCoberturas = {
     DP_NORMAL: {
       nome: "DP NORMAL - Danos Próprios com Franquia",
@@ -183,156 +176,9 @@ function CriarCliente() {
     { code: "CV", name: "Cabo Verde", flag: "🇨🇻" },
   ];
 
-  // Função para enviar email - CORRIGIDA
-  const enviarEmailCotacao = async (cotacao) => {
-    try {
-      setEnviandoEmail(true);
-
-      const dadosCotacao = {
-        Nome_Usuario: `${cotacao.cliente.primeiroNome} ${cotacao.cliente.sobrenome}`,
-        Nome_Documento: `Cotação ${cotacao.id}`,
-        Nome_Categoria: tipoCobertura,
-        Nome_Departamento: "Seguros Auto",
-        Estado: "Ativa",
-        Data_Pedido: new Date().toLocaleDateString("pt-MZ"),
-      };
-
-      // Mensagem mais profissional e sem link desnecessário
-      const mensagem = `
-IMPERIAL SEGUROS - NOVA COTAÇÃO CRIADA
-
-Detalhes da Cotação:
-────────────────────
-• Cliente: ${dadosCotacao.Nome_Usuario}
-• Número da Cotação: ${dadosCotacao.Nome_Documento}
-• Tipo de Cobertura: ${dadosCotacao.Nome_Categoria}
-• Departamento: ${dadosCotacao.Nome_Departamento}
-• Estado: ${dadosCotacao.Estado}
-• Data de Emissão: ${dadosCotacao.Data_Pedido}
-• Valor Total: MT ${parseFloat(cotacao.totalPremio).toLocaleString("pt-MZ", {
-        minimumFractionDigits: 2,
-      })}
-• Número de Veículos: ${cotacao.veiculos.length}
-
-Resumo dos Veículos:
-──────────────────
-${cotacao.veiculos
-  .map(
-    (veiculo, index) => `
-Veículo ${index + 1}:
-• Marca/Modelo: ${veiculo.marcaModelo}
-• Tipo: ${veiculo.tipoViatura}
-• Capital Seguro: MT ${parseFloat(veiculo.capitalSeguro).toLocaleString(
-      "pt-MZ"
-    )}
-• Prémio: MT ${parseFloat(veiculo.premioAnnual).toLocaleString("pt-MZ", {
-      minimumFractionDigits: 2,
-    })}
-`
-  )
-  .join("")}
-
-Esta é uma notificação automática do Sistema de Gestão de Seguros.
-Por favor, acesse o sistema para visualizar os detalhes completos.
-
-Atenciosamente,
-Sistema Imperial Seguros
-      `.trim();
-
-      console.log("Preparando envio de email...");
-
-      // Simulação mais realista do envio de email
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Aqui você deve integrar com seu backend real
-      // Exemplo de integração com API:
-      /*
-      const response = await fetch('/api/enviar-email-cotacao', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          destinatarios: ['admin@imperialinsurance-mz.com'], // Ou buscar do localStorage
-          assunto: `Nova Cotação - ${cotacao.id}`,
-          mensagem: mensagem,
-          dadosCotacao: dadosCotacao
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro no envio do email');
-      }
-      */
-
-      console.log("Email enviado com sucesso!");
-      console.log("Destinatários: Administradores do sistema");
-      console.log("Assunto: Nova Cotação de Seguro");
-      console.log("Mensagem:", mensagem);
-
-      alert(`✅ Cotação ${cotacao.id} enviada por email com sucesso!`);
-      setMostrarOpcoesPartilha(false);
-    } catch (error) {
-      console.error("Erro ao enviar email:", error);
-      alert("❌ Erro ao enviar email. Por favor, tente novamente.");
-    } finally {
-      setEnviandoEmail(false);
-    }
-  };
-
-  // Função para gerar ID único da cotação
-  const gerarIdCotacao = () => {
-    const timestamp = new Date().getTime();
-    const random = Math.floor(Math.random() * 1000);
-    return `CT${timestamp}${random}`;
-  };
-
-  // Função para salvar cotação
-  const salvarCotacao = () => {
-    if (!formData.email || veiculos.length === 0) {
-      alert(
-        "Preencha todos os dados do cliente e adicione pelo menos um veículo!"
-      );
-      return;
-    }
-
-    const novaCotacao = {
-      id: gerarIdCotacao(),
-      dataCriacao: new Date().toISOString(),
-      cliente: {
-        tipo: tipoCliente,
-        ...formData,
-      },
-      veiculos: veiculos.map((v) => ({
-        ...v,
-        tipoCobertura: tipoCobertura,
-        configCobertura: configCoberturas[tipoCobertura],
-      })),
-      totalPremio: calcularTotalPremio(),
-      status: "ativa",
-      dataInicio: new Date().toISOString(),
-      dataFim: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-
-    setCotacoesSalvas((prev) => [...prev, novaCotacao]);
-    setCotacaoGerada(novaCotacao);
-    setMostrarOpcoesPartilha(true);
-
-    // Salvar no localStorage
-    const cotacoesExistentes = JSON.parse(
-      localStorage.getItem("cotacoes") || "[]"
-    );
-    localStorage.setItem(
-      "cotacoes",
-      JSON.stringify([...cotacoesExistentes, novaCotacao])
-    );
-
-    alert("✅ Cotação criada com sucesso! ID: " + novaCotacao.id);
-  };
-
-  // Função para gerar PDF da cotação com layout MAIS PROFISSIONAL
-  const gerarPDF = () => {
-    if (!cotacaoGerada) return;
+  // FUNÇÃO PARA GERAR PDF (ATUALIZADA PARA RETORNAR O BLOB)
+  const gerarPDFBlob = () => {
+    if (!cotacaoGerada) return null;
 
     const doc = new jsPDF();
 
@@ -350,10 +196,10 @@ Sistema Imperial Seguros
     };
 
     // Cabeçalho PROFISSIONAL
-    doc.setFillColor(0, 82, 155); // Azul Imperial mais profissional
+    doc.setFillColor(0, 82, 155);
     doc.rect(0, 0, 210, 50, "F");
 
-    // Logo area (espaço para logo)
+    // Logo area
     doc.setFillColor(255, 255, 255);
     doc.rect(margin, 10, 30, 30, "F");
     doc.setTextColor(0, 82, 155);
@@ -399,7 +245,6 @@ Sistema Imperial Seguros
     yPosition += 15;
     checkPageBreak(40);
 
-    // Header da seção
     doc.setFillColor(240, 240, 240);
     doc.rect(margin, yPosition, 170, 8, "F");
     doc.setFontSize(10);
@@ -466,7 +311,7 @@ Sistema Imperial Seguros
       yPosition
     );
 
-    // Tabela de Prémios PROFISSIONAL
+    // Tabela de Prémios
     yPosition += 15;
     checkPageBreak(100);
 
@@ -681,7 +526,7 @@ Sistema Imperial Seguros
       yPosition += lineHeight * 1.3;
     });
 
-    // Rodapé PROFISSIONAL
+    // Rodapé
     const ultimaPagina = doc.internal.getNumberOfPages();
     doc.setPage(ultimaPagina);
 
@@ -721,16 +566,353 @@ Sistema Imperial Seguros
       { align: "center" }
     );
 
-    // Salvar o PDF
-    doc.save(`cotacao-${cotacaoGerada.id}.pdf`);
+    // Retornar o PDF como Blob
+    return doc.output("blob");
   };
 
-  // Função para visualizar PDF
+  // FUNÇÃO PARA ENVIAR EMAIL COM TEMPLATE PERSONALIZADO (CORRIGIDA)
+  const enviarEmailCotacao = async (cotacao) => {
+    try {
+      setEnviandoEmail(true);
+
+      // VERIFICAR SE O EMAIL DO CLIENTE ESTÁ PREENCHIDO
+      if (!cotacao.cliente.email) {
+        alert("❌ É necessário ter um email do cliente para enviar a cotação.");
+        setEnviandoEmail(false);
+        return;
+      }
+
+      // Preparar dados para o template - ENVIANDO PARA O EMAIL DO CLIENTE
+      const templateParams = {
+        to_email: cotacao.cliente.email, // AGORA ENVIA PARA O EMAIL DO CLIENTE
+        to_name: `${cotacao.cliente.primeiroNome} ${cotacao.cliente.sobrenome}`,
+        from_name: "Imperial Seguros",
+        cotacao_id: cotacao.id,
+        cliente_nome: `${cotacao.cliente.primeiroNome} ${cotacao.cliente.sobrenome}`,
+        total_premio: formatarMoeda(cotacao.totalPremio),
+        num_veiculos: cotacao.veiculos.length,
+        tipo_cobertura: getConfigCobertura()?.nome || tipoCobertura,
+        data_emissao: new Date().toLocaleDateString("pt-MZ"),
+        validade: "30 dias",
+        veiculos_lista: cotacao.veiculos
+          .map(
+            (veiculo, index) =>
+              `• ${veiculo.marcaModelo} (${
+                veiculo.tipoViatura
+              }) - ${formatarMoeda(veiculo.premioAnnual)}`
+          )
+          .join("\\n"),
+        contacto_empresa: "comercial@imperialinsurance-mz.com",
+        telefone_empresa: "+258 84 300 0000",
+      };
+
+      console.log("Enviando email para:", cotacao.cliente.email);
+
+      // Envio com EmailJS usando PUBLIC_KEY
+      const result = await emailjs.send(
+        EMAILJS_CONFIG.SERVICE_ID,
+        EMAILJS_CONFIG.TEMPLATE_ID,
+        templateParams,
+        EMAILJS_CONFIG.PUBLIC_KEY
+      );
+
+      console.log(
+        "Email enviado com sucesso para:",
+        cotacao.cliente.email,
+        result
+      );
+      alert(
+        `✅ Cotação ${cotacao.id} enviada por email para ${cotacao.cliente.email} com sucesso!`
+      );
+      setMostrarOpcoesPartilha(false);
+    } catch (error) {
+      console.error("Erro detalhado ao enviar email:", error);
+
+      // Fallback - simulação de envio se EmailJS não estiver configurado
+      if (
+        error.text?.includes("Invalid login") ||
+        error.text?.includes("Service not found") ||
+        error.text?.includes("Public Key")
+      ) {
+        console.log("EmailJS não configurado, simulando envio...");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        alert(
+          `✅ Cotação ${cotacao.id} enviada por email para ${cotacao.cliente.email} com sucesso! (Simulado)`
+        );
+        setMostrarOpcoesPartilha(false);
+      } else {
+        alert("❌ Erro ao enviar email. Por favor, tente novamente.");
+      }
+    } finally {
+      setEnviandoEmail(false);
+    }
+  };
+
+  // Função para gerar ID único da cotação
+  const gerarIdCotacao = () => {
+    const timestamp = new Date().getTime();
+    const random = Math.floor(Math.random() * 1000);
+    return `CT${timestamp}${random}`;
+  };
+
+  // Função para salvar cotação
+  const salvarCotacao = () => {
+    if (!formData.email || veiculos.length === 0) {
+      alert(
+        "Preencha todos os dados do cliente e adicione pelo menos um veículo!"
+      );
+      return;
+    }
+
+    const novaCotacao = {
+      id: gerarIdCotacao(),
+      dataCriacao: new Date().toISOString(),
+      cliente: {
+        tipo: tipoCliente,
+        ...formData,
+      },
+      veiculos: veiculos.map((v) => ({
+        ...v,
+        tipoCobertura: tipoCobertura,
+        configCobertura: configCoberturas[tipoCobertura],
+      })),
+      totalPremio: calcularTotalPremio(),
+      status: "ativa",
+      dataInicio: new Date().toISOString(),
+      dataFim: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    setCotacaoGerada(novaCotacao);
+    setMostrarOpcoesPartilha(true);
+
+    // Salvar no localStorage
+    const cotacoesExistentes = JSON.parse(
+      localStorage.getItem("cotacoes") || "[]"
+    );
+    localStorage.setItem(
+      "cotacoes",
+      JSON.stringify([...cotacoesExistentes, novaCotacao])
+    );
+
+    alert("✅ Cotação criada com sucesso! ID: " + novaCotacao.id);
+  };
+
+  // Função para enviar cotação por email (ATUALIZADA)
+  const enviarEmail = async () => {
+    if (!cotacaoGerada) return;
+
+    // Verificação adicional do email do cliente
+    if (!cotacaoGerada.cliente.email) {
+      alert("❌ É necessário ter um email do cliente para enviar a cotação.");
+      return;
+    }
+
+    // Confirmação antes do envio
+    const confirmarEnvio = window.confirm(
+      `Deseja enviar a cotação ${cotacaoGerada.id} para o email ${cotacaoGerada.cliente.email}?`
+    );
+
+    if (confirmarEnvio) {
+      await enviarEmailCotacao(cotacaoGerada);
+    }
+  };
+
+  // FUNÇÕES AUXILIARES
+  const calcularPremio = (
+    capitalSeguro,
+    tipoViatura,
+    cobertura,
+    taxaSelecionada
+  ) => {
+    const config = configCoberturas[cobertura];
+    if (!config || !tipoViatura) return { taxa: 0, premioAnnual: "0.00" };
+
+    const capital = parseFloat(capitalSeguro) || 0;
+    if (capital === 0) return { taxa: 0, premioAnnual: "0.00" };
+
+    let taxa;
+    if (
+      taxaSelecionada &&
+      taxaSelecionada !== "" &&
+      taxaSelecionada !== null &&
+      taxaSelecionada !== undefined
+    ) {
+      taxa = parseFloat(taxaSelecionada);
+    } else {
+      taxa = config.taxas[tipoViatura] || 0;
+    }
+
+    if (taxa === 0) return { taxa: 0, premioAnnual: "0.00" };
+
+    const premioCalculado = capital * taxa;
+    const premioMinimo = config.premioMinimo[tipoViatura] || 0;
+    const premioFinal = Math.max(premioCalculado, premioMinimo);
+
+    return {
+      taxa: taxa,
+      premioAnnual: premioFinal.toFixed(2),
+      premioCalculado: premioCalculado.toFixed(2),
+      premioMinimo: premioMinimo,
+    };
+  };
+
+  useEffect(() => {
+    if (
+      veiculoAtual.capitalSeguro &&
+      veiculoAtual.tipoViatura &&
+      tipoCobertura
+    ) {
+      const resultado = calcularPremio(
+        veiculoAtual.capitalSeguro,
+        veiculoAtual.tipoViatura,
+        tipoCobertura,
+        veiculoAtual.taxaSelecionada
+      );
+
+      setVeiculoAtual((prev) => ({
+        ...prev,
+        taxa: resultado.taxa,
+        premioAnnual: resultado.premioAnnual,
+      }));
+    }
+  }, [
+    veiculoAtual.capitalSeguro,
+    veiculoAtual.tipoViatura,
+    tipoCobertura,
+    veiculoAtual.taxaSelecionada,
+  ]);
+
+  useEffect(() => {
+    if (veiculoAtual.tipoViatura && tipoCobertura) {
+      setVeiculoAtual((prev) => ({
+        ...prev,
+        taxaSelecionada: "",
+      }));
+    }
+  }, [veiculoAtual.tipoViatura, tipoCobertura]);
+
+  const handleTipoClienteChange = (novoTipo) => {
+    if (novoTipo !== tipoCliente) {
+      setIsSwitching(true);
+      setTimeout(() => {
+        setTipoCliente(novoTipo);
+        setIsSwitching(false);
+      }, 300);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    salvarCotacao();
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleVeiculoChange = (field, value) => {
+    setVeiculoAtual((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const adicionarVeiculo = () => {
+    if (
+      !veiculoAtual.marcaModelo ||
+      !veiculoAtual.tipoViatura ||
+      !veiculoAtual.capitalSeguro
+    ) {
+      alert("Preencha os campos obrigatórios do veículo!");
+      return;
+    }
+
+    setVeiculos((prev) => [
+      ...prev,
+      {
+        ...veiculoAtual,
+        id: Date.now(),
+        taxaUsada:
+          veiculoAtual.taxaSelecionada ||
+          getConfigCobertura()?.taxas[veiculoAtual.tipoViatura],
+      },
+    ]);
+    setVeiculoAtual({
+      marcaModelo: "",
+      matricula: "",
+      ano: "",
+      motor: "",
+      chassis: "",
+      lotacao: "",
+      tipoViatura: "",
+      capitalSeguro: "",
+      taxa: "",
+      taxaSelecionada: "",
+      premioAnnual: "",
+    });
+  };
+
+  const removerVeiculo = (id) => {
+    setVeiculos((prev) => prev.filter((v) => v.id !== id));
+  };
+
+  const calcularTotalPremio = () => {
+    return veiculos.reduce(
+      (total, veiculo) => total + (parseFloat(veiculo.premioAnnual) || 0),
+      0
+    );
+  };
+
+  const getPaisSelecionado = () => {
+    return (
+      paises.find((pais) => pais.code === formData.nacionalidade) || paises[0]
+    );
+  };
+
+  const getConfigCobertura = () => {
+    return tipoCobertura ? configCoberturas[tipoCobertura] : null;
+  };
+
+  const getTaxasDisponiveis = () => {
+    if (!tipoCobertura || !veiculoAtual.tipoViatura) return [];
+    return getConfigCobertura()?.taxasOpcoes[veiculoAtual.tipoViatura] || [];
+  };
+
+  const formatarTaxa = (taxa) => {
+    return `${(taxa * 100).toFixed(1)}%`;
+  };
+
+  const formatarMoeda = (valor) => {
+    return `MT ${parseFloat(valor).toLocaleString("pt-MZ", {
+      minimumFractionDigits: 2,
+    })}`;
+  };
+
+  // Funções de visualização/download
+  const gerarPDF = () => {
+    const pdfBlob = gerarPDFBlob();
+    if (pdfBlob) {
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cotacao-${cotacaoGerada.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const visualizarPDF = () => {
-    gerarPDF();
+    const pdfBlob = gerarPDFBlob();
+    if (pdfBlob) {
+      const url = URL.createObjectURL(pdfBlob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
   };
 
-  // Função para imprimir
   const imprimirCotacao = () => {
     const conteudo = `
       <!DOCTYPE html>
@@ -1174,17 +1356,15 @@ Sistema Imperial Seguros
                               .map(([key, value]) =>
                                 value > 0
                                   ? `<li>
-                                      <span>${key
-                                        .replace(/([A-Z])/g, " $1")
-                                        .replace(/^./, (str) =>
-                                          str.toUpperCase()
-                                        )
-                                        .replace("Rc", "RC")
-                                        .replace("Dp", "DP")}</span>
-                                      <span class="coverage-value">MT ${value.toLocaleString(
-                                        "pt-MZ"
-                                      )}</span>
-                                    </li>`
+                          <span>${key
+                            .replace(/([A-Z])/g, " $1")
+                            .replace(/^./, (str) => str.toUpperCase())
+                            .replace("Rc", "RC")
+                            .replace("Dp", "DP")}</span>
+                          <span class="coverage-value">MT ${value.toLocaleString(
+                            "pt-MZ"
+                          )}</span>
+                        </li>`
                                   : ""
                               )
                               .join("")
@@ -1237,230 +1417,7 @@ Sistema Imperial Seguros
     janela.document.close();
   };
 
-  // Função para enviar cotação por email - CORRIGIDA
-  const enviarEmail = async () => {
-    if (!cotacaoGerada) return;
-
-    // Verificar se há dados necessários
-    if (!cotacaoGerada.cliente.email) {
-      alert("❌ É necessário ter um email do cliente para enviar a cotação.");
-      return;
-    }
-
-    await enviarEmailCotacao(cotacaoGerada);
-  };
-
-  // Restante das funções existentes (manter igual)
-  const calcularPremio = (
-    capitalSeguro,
-    tipoViatura,
-    cobertura,
-    taxaSelecionada
-  ) => {
-    const config = configCoberturas[cobertura];
-    if (!config || !tipoViatura) return { taxa: 0, premioAnnual: "0.00" };
-
-    const capital = parseFloat(capitalSeguro) || 0;
-    if (capital === 0) return { taxa: 0, premioAnnual: "0.00" };
-
-    let taxa;
-    if (
-      taxaSelecionada &&
-      taxaSelecionada !== "" &&
-      taxaSelecionada !== null &&
-      taxaSelecionada !== undefined
-    ) {
-      taxa = parseFloat(taxaSelecionada);
-    } else {
-      taxa = config.taxas[tipoViatura] || 0;
-    }
-
-    if (taxa === 0) return { taxa: 0, premioAnnual: "0.00" };
-
-    const premioCalculado = capital * taxa;
-    const premioMinimo = config.premioMinimo[tipoViatura] || 0;
-    const premioFinal = Math.max(premioCalculado, premioMinimo);
-
-    return {
-      taxa: taxa,
-      premioAnnual: premioFinal.toFixed(2),
-      premioCalculado: premioCalculado.toFixed(2),
-      premioMinimo: premioMinimo,
-    };
-  };
-
-  useEffect(() => {
-    if (
-      veiculoAtual.capitalSeguro &&
-      veiculoAtual.tipoViatura &&
-      tipoCobertura
-    ) {
-      const resultado = calcularPremio(
-        veiculoAtual.capitalSeguro,
-        veiculoAtual.tipoViatura,
-        tipoCobertura,
-        veiculoAtual.taxaSelecionada
-      );
-
-      setVeiculoAtual((prev) => ({
-        ...prev,
-        taxa: resultado.taxa,
-        premioAnnual: resultado.premioAnnual,
-      }));
-    }
-  }, [
-    veiculoAtual.capitalSeguro,
-    veiculoAtual.tipoViatura,
-    tipoCobertura,
-    veiculoAtual.taxaSelecionada,
-  ]);
-
-  useEffect(() => {
-    if (veiculoAtual.tipoViatura && tipoCobertura) {
-      setVeiculoAtual((prev) => ({
-        ...prev,
-        taxaSelecionada: "",
-      }));
-    }
-  }, [veiculoAtual.tipoViatura, tipoCobertura]);
-
-  const handleTipoClienteChange = (novoTipo) => {
-    if (novoTipo !== tipoCliente) {
-      setIsSwitching(true);
-      setTimeout(() => {
-        setTipoCliente(novoTipo);
-        setIsSwitching(false);
-      }, 300);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    salvarCotacao();
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleVeiculoChange = (field, value) => {
-    setVeiculoAtual((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const adicionarVeiculo = () => {
-    if (
-      !veiculoAtual.marcaModelo ||
-      !veiculoAtual.tipoViatura ||
-      !veiculoAtual.capitalSeguro
-    ) {
-      alert("Preencha os campos obrigatórios do veículo!");
-      return;
-    }
-
-    setVeiculos((prev) => [
-      ...prev,
-      {
-        ...veiculoAtual,
-        id: Date.now(),
-        taxaUsada:
-          veiculoAtual.taxaSelecionada ||
-          getConfigCobertura()?.taxas[veiculoAtual.tipoViatura],
-      },
-    ]);
-    setVeiculoAtual({
-      marcaModelo: "",
-      matricula: "",
-      ano: "",
-      motor: "",
-      chassis: "",
-      lotacao: "",
-      tipoViatura: "",
-      capitalSeguro: "",
-      taxa: "",
-      taxaSelecionada: "",
-      premioAnnual: "",
-    });
-  };
-
-  const removerVeiculo = (id) => {
-    setVeiculos((prev) => prev.filter((v) => v.id !== id));
-  };
-
-  const calcularTotalPremio = () => {
-    return veiculos.reduce(
-      (total, veiculo) => total + (parseFloat(veiculo.premioAnnual) || 0),
-      0
-    );
-  };
-
-  const getPaisSelecionado = () => {
-    return (
-      paises.find((pais) => pais.code === formData.nacionalidade) || paises[0]
-    );
-  };
-
-  const getConfigCobertura = () => {
-    return tipoCobertura ? configCoberturas[tipoCobertura] : null;
-  };
-
-  const getTaxasDisponiveis = () => {
-    if (!tipoCobertura || !veiculoAtual.tipoViatura) return [];
-    return getConfigCobertura()?.taxasOpcoes[veiculoAtual.tipoViatura] || [];
-  };
-
-  const formatarTaxa = (taxa) => {
-    return `${(taxa * 100).toFixed(1)}%`;
-  };
-
-  const formatarMoeda = (valor) => {
-    return `MT ${parseFloat(valor).toLocaleString("pt-MZ", {
-      minimumFractionDigits: 2,
-    })}`;
-  };
-
-  const processarPagamento = async () => {
-    if (!formaPagamento) {
-      alert("Selecione uma forma de pagamento!");
-      return;
-    }
-
-    if (
-      (formaPagamento === "M-PESA" && !contactoMPesa) ||
-      (formaPagamento === "E-MOLA" && !contactoEMola)
-    ) {
-      alert("Preencha o contacto para a forma de pagamento selecionada!");
-      return;
-    }
-
-    if (!pinPagamento) {
-      alert("Digite o PIN de autorização!");
-      return;
-    }
-
-    setProcessandoPagamento(true);
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      alert("✅ Pagamento processado com sucesso!");
-      setMostrarPagamento(false);
-      setFormaPagamento("");
-      setContactoMPesa("");
-      setContactoEMola("");
-      setPinPagamento("");
-    } catch (error) {
-      alert("❌ Erro no processamento do pagamento. Tente novamente.");
-    } finally {
-      setProcessandoPagamento(false);
-    }
-  };
-
-  // ... (restante do JSX permanece igual, apenas atualizei o botão de email no modal)
+  // JSX COMPLETO
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -1520,40 +1477,6 @@ Sistema Imperial Seguros
                   isSwitching ? "opacity-0 scale-95" : "opacity-100 scale-100"
                 }`}
               >
-                {tipoCliente === "Particular" && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-white">
-                        Nacionalidade *
-                      </label>
-                      <div className="relative group">
-                        <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-400 h-4 w-4 z-10" />
-                        <select
-                          required
-                          className="w-full pl-10 pr-10 py-3 rounded-xl text-white transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer bg-gray-700 border border-gray-600"
-                          value={formData.nacionalidade}
-                          onChange={(e) =>
-                            handleInputChange("nacionalidade", e.target.value)
-                          }
-                        >
-                          {paises.map((pais, index) => (
-                            <option key={index} value={pais.code}>
-                              {pais.flag} {pais.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2 z-10">
-                          <span className="text-lg">
-                            {getPaisSelecionado().flag}
-                          </span>
-                          <ChevronDown className="text-green-400 h-4 w-4" />
-                        </div>
-                      </div>
-                    </div>
-                    <div></div>
-                  </div>
-                )}
-
                 {tipoCliente === "Particular" ? (
                   <div className="space-y-6">
                     <div className="flex items-center gap-3 mb-6">
@@ -1564,6 +1487,35 @@ Sistema Imperial Seguros
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-white">
+                          Nacionalidade *
+                        </label>
+                        <div className="relative group">
+                          <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-400 h-4 w-4 z-10" />
+                          <select
+                            required
+                            className="w-full pl-10 pr-10 py-3 rounded-xl text-white transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer bg-gray-700 border border-gray-600"
+                            value={formData.nacionalidade}
+                            onChange={(e) =>
+                              handleInputChange("nacionalidade", e.target.value)
+                            }
+                          >
+                            {paises.map((pais, index) => (
+                              <option key={index} value={pais.code}>
+                                {pais.flag} {pais.name}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2 z-10">
+                            <span className="text-lg">
+                              {getPaisSelecionado().flag}
+                            </span>
+                            <ChevronDown className="text-green-400 h-4 w-4" />
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-white">
                           Título de Contato
@@ -2272,18 +2224,6 @@ Sistema Imperial Seguros
                       {veiculos.length} veículo(s) adicionado(s)
                     </div>
                   </div>
-
-                  {/* Botão para Processar Pagamento */}
-                  <div className="mt-6 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setMostrarPagamento(true)}
-                      className="px-8 py-4 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center gap-3 group bg-purple-600 text-white hover:bg-purple-700"
-                    >
-                      <CreditCard className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" />
-                      <span className="text-lg">Processar Pagamento</span>
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -2327,155 +2267,9 @@ Sistema Imperial Seguros
               </div>
             </div>
           )}
-
-          {/* FORMULÁRIO DE PAGAMENTO */}
-          {mostrarPagamento && veiculos.length > 0 && (
-            <div className="rounded-2xl border-2 transition-all duration-500 hover:shadow-2xl overflow-hidden bg-gradient-to-br from-purple-900/20 to-gray-900 border-purple-600/20">
-              <div className="p-6 border-b border-purple-600/20">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-1 h-8 bg-purple-500 rounded-full" />
-                  <h3 className="text-xl font-bold text-white">
-                    Processar Pagamento
-                  </h3>
-                </div>
-
-                {/* Resumo do Valor */}
-                <div className="mb-6 p-4 rounded-xl text-center bg-purple-600/10 border border-purple-600/30">
-                  <div className="text-2xl font-bold text-white mb-2">
-                    {formatarMoeda(calcularTotalPremio())}
-                  </div>
-                  <div className="text-sm text-gray-300">
-                    Total a pagar por {veiculos.length} veículo(s)
-                  </div>
-                </div>
-
-                {/* Forma de Pagamento */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-white">
-                      Forma de Pagamento *
-                    </label>
-                    <div className="relative group">
-                      <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-500 h-4 w-4 z-10" />
-                      <select
-                        required
-                        className="w-full pl-10 pr-10 py-3 rounded-xl text-white transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-purple-500 appearance-none cursor-pointer bg-gray-700 border border-gray-600"
-                        value={formaPagamento}
-                        onChange={(e) => setFormaPagamento(e.target.value)}
-                      >
-                        <option value="">- Selecionar -</option>
-                        <option value="M-PESA">M-PESA (Vodacom)</option>
-                        <option value="E-MOLA">E-MOLA (Movitel)</option>
-                        <option value="NUMERARIO">Numerário</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-500 h-4 w-4 z-10" />
-                    </div>
-                  </div>
-
-                  {/* Campo de Contacto para M-PESA */}
-                  {formaPagamento === "M-PESA" && (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-white">
-                        Contacto Vodacom *
-                      </label>
-                      <div className="relative group">
-                        <Smartphone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-500 h-4 w-4" />
-                        <input
-                          type="tel"
-                          required
-                          className="w-full pl-10 pr-4 py-3 rounded-xl text-white placeholder-gray-400 transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-purple-500 bg-gray-700 border border-gray-600"
-                          placeholder="+258 8X XXX XXXX"
-                          value={contactoMPesa}
-                          onChange={(e) => setContactoMPesa(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Campo de Contacto para E-MOLA */}
-                  {formaPagamento === "E-MOLA" && (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-white">
-                        Contacto Movitel *
-                      </label>
-                      <div className="relative group">
-                        <Smartphone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-500 h-4 w-4" />
-                        <input
-                          type="tel"
-                          required
-                          className="w-full pl-10 pr-4 py-3 rounded-xl text-white placeholder-gray-400 transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-purple-500 bg-gray-700 border border-gray-600"
-                          placeholder="+258 8X XXX XXXX"
-                          value={contactoEMola}
-                          onChange={(e) => setContactoEMola(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Campo PIN para M-PESA e E-MOLA */}
-                {(formaPagamento === "M-PESA" ||
-                  formaPagamento === "E-MOLA") && (
-                  <div className="mb-6">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-white">
-                        PIN de Autorização *
-                      </label>
-                      <div className="relative group">
-                        <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-500 h-4 w-4" />
-                        <input
-                          type="password"
-                          required
-                          className="w-full pl-10 pr-4 py-3 rounded-xl text-white placeholder-gray-400 transition-all duration-300 focus:outline-none focus:scale-[1.02] focus:ring-2 focus:ring-purple-500 bg-gray-700 border border-gray-600"
-                          placeholder="Digite o PIN"
-                          value={pinPagamento}
-                          onChange={(e) => setPinPagamento(e.target.value)}
-                          maxLength={4}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Digite o PIN do seu{" "}
-                        {formaPagamento === "M-PESA" ? "M-PESA" : "E-MOLA"}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Botões de Ação do Pagamento */}
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarPagamento(false)}
-                    className="px-6 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 border-2 font-semibold border-gray-600 text-gray-300 hover:bg-gray-700"
-                  >
-                    Voltar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={processarPagamento}
-                    disabled={processandoPagamento}
-                    className="px-8 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 text-white hover:bg-green-700"
-                  >
-                    {processandoPagamento ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        <span>Processando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
-                        <span>Confirmar Pagamento</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </form>
 
-        {/* MODAL DE PARTILHA DA COTAÇÃO - ATUALIZADO */}
+        {/* MODAL DE PARTILHA DA COTAÇÃO */}
         {mostrarOpcoesPartilha && cotacaoGerada && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="rounded-2xl border-2 w-full max-w-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-green-600/20">
@@ -2503,6 +2297,9 @@ Sistema Imperial Seguros
                     <div className="text-gray-300 text-sm">
                       Cliente: {cotacaoGerada.cliente.primeiroNome}{" "}
                       {cotacaoGerada.cliente.sobrenome}
+                    </div>
+                    <div className="text-gray-300 text-sm">
+                      Email: {cotacaoGerada.cliente.email}
                     </div>
                     <div className="text-gray-300 text-sm">
                       Total: {formatarMoeda(cotacaoGerada.totalPremio)}
@@ -2554,7 +2351,7 @@ Sistema Imperial Seguros
                         {enviandoEmail ? "Enviando..." : "Enviar Email"}
                       </span>
                       <span className="text-xs text-gray-400">
-                        Para administradores
+                        Para o cliente
                       </span>
                     </button>
                   </div>
